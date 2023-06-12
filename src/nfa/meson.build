@@ -1,0 +1,1 @@
+nfa = library('nfa', 'nfa.cpp', include_directories: ac_include, link_with: utils)
