@@ -111,7 +111,6 @@ void NFA::build_trie (const std::vector<std::string> &patterns)
                                         continue;
                                 }
                         prev->add_match (&pattern);
-                        std::cout << "added match " << pattern << " to " << prev << std::endl;
                 }
 }
 
