@@ -28,7 +28,7 @@ class NFA;
 class State {
   friend class NFA;
  public:
-  explicit State (State *failed, State *nfa_fail, size_t depth);
+  explicit State (State *failed, size_t depth);
 
   // size_t memory_usage();
   [[nodiscard]]
@@ -43,7 +43,7 @@ class State {
   const std::set<const std::string *>& get_matches() const;
 
  private:
-  State* _transitions[256] {nullptr};
+  State* _transitions[256];
   std::set<const std::string *> _matches{};
   State *_failed;
   State *NFA_FAIL;
@@ -89,9 +89,8 @@ class NFA {
   MatchKind _match_kind;
   /// The charset of the given pattern. It is constructed during NFA compiling
   CharSet _char_set;
-  State *_fail_state {new State(nullptr, nullptr, 0)};
-  State *_start_state {new State(nullptr, _fail_state, 0)};
-  State *_dead_state {new State(nullptr, _fail_state, 0)};
+  State *_start_state {new State(nullptr, 0)};
+  State *_dead_state {new State(nullptr, 0)};
   /// The order of regular states
   std::vector<State*> _states;
   std::vector<size_t> _pattern_lens;

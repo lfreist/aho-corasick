@@ -11,34 +11,7 @@
 
 #include <iostream>
 #include <cstring>
-#include <random>
-
-std::string generate_text(size_t size)
-{
-        std::string result;
-        result.reserve(size);
-
-        std::mt19937 rng(42);  // Set a fixed seed for deterministic output
-        std::uniform_int_distribution<char> dist(0x21, 0x7e);
-
-        for (size_t i = 0; i < size; ++i) {
-                        result.push_back(dist(rng));
-                }
-
-        return result;
-}
-
-std::vector<std::string> generate_patterns(int num, size_t min_len, size_t max_len)
-{
-        std::vector<std::string> patterns(num);
-        std::mt19937 rng(9);
-        std::uniform_int_distribution<size_t> sizes(min_len, max_len);
-        for (auto p : patterns)
-                {
-                        p.assign (generate_text (sizes(rng)));
-                }
-        return patterns;
-}
+#include <fstream>
 
 size_t ac_nfa (std::string &text, std::vector<std::string> &patterns)
 {
@@ -49,16 +22,9 @@ size_t ac_nfa (std::string &text, std::vector<std::string> &patterns)
                 {
                         if (state->is_match ())
                                 {
-                                        for (auto i : state->get_matches ())
-                                                {
-                                                        ++result;
-                                                }
+                                        result += state->get_matches().size();
                                 }
                         state = state->next_state (c);
-                        if (state == nfa._fail_state)
-                                {
-                                        state = nfa._start_state;
-                                }
                         if (state == nfa._dead_state)
                                 {
                                         std::cout << "\n\ndead\n\n";
@@ -99,22 +65,72 @@ size_t naiv (std::string &text, std::vector<std::string> &patterns)
 
 int main (int argc, char **argv)
 {
-        std::cout << "\n-----------------------------------------\n";
-        std::cout << "Generating text... ";
-        std::string text = generate_text (0xf000000);
-        std::cout << "done." << std::endl;
-        std::cout << "Generating patterns... ";
-        std::vector<std::string> patterns = generate_patterns (10000, 5, 20);
-        std::cout << "done." << std::endl;
-        std::cout << "-----------------------------------------\n\n";
+        std::ifstream ifs ("files/harry_potter_1.txt");
+        std::string text ((std::istreambuf_iterator<char> (ifs)),
+                          (std::istreambuf_iterator<char> ()));
+
+        std::vector<std::string> patterns = {
+                "Hogwarts", "magical", "world", "Harry", "Potter", "wizard", "journey", "School", "Witchcraft",
+                "Wizardry", "Ron", "Weasley", "Hermione", "Granger", "adventures", "challenges", "creatures",
+                "Quidditch", "unraveled", "mysteries", "Philosopher's", "Stone", "friends", "courage", "triumphed",
+                "Lord", "Voldemort", "dark", "killed", "parents", "wizarding", "spells", "broomstick", "enchanted",
+                "sorting", "hat", "potion", "Snape", "Professor", "Dumbledore", "transfiguration", "magician", "spell",
+                "quizzes", "fluffy", "Hagrid", "Quirrell", "ghosts", "chamber", "secrets", "Norbert", "Phoenix",
+                "winged", "keys", "chess", "devil's", "mirror", "Sorcerer's", "castle", "Dobby", "elf", "goblin",
+                "wand", "wizards", "witches", "cauldron", "Diagon", "Alley", "Weasleys", "Gringotts", "treasure",
+                "Troll", "transformation", "transports", "flying", "invisibility", "cloak", "Muggle", "platform",
+                "nine", "three-quarters", "spellbook", "spider", "aragog", "quill", "owl", "Azkaban", "dragon",
+                "Triwizard", "Tournament", "unforgivable", "curses", "werewolf", "patronus", "Hogsmeade", "marauder's",
+                "map", "Pensieve", "Dementors", "Merlin", "parseltongue", "Snitch", "Gryffindor", "Ravenclaw",
+                "Hufflepuff", "Slytherin", "crucio", "expelliarmus", "sectumsempra", "accio", "lumos", "Nox", "quaffle",
+                "bludger", "snitch", "seeker", "Ollivander", "Petrificus", "Totalus", "Wingardium", "Leviosa",
+                "Alohomora", "Deluminator", "Polyjuice", "Remembrall", "time", "turner", "bezoar", "Flourish", "Blotts",
+                "Florean", "Fortescue", "Gellert", "Grindelwald", "Nicholas", "Flamel", "Rita", "Skeeter", "Viktor",
+                "Krum", "Molly", "Ginny", "Arthur", "Lucius", "Malfoy", "Neville", "Luna", "Lovegood", "Ollivanders",
+                "Zonko's", "Filch", "Borgin", "Burkes", "Fudge", "Pomfrey", "Percy", "Fred", "George", "Charlie",
+                "Bill", "adorable", "adventurous", "aggressive", "agreeable", "alert", "amazing", "ambitious",
+                "amusing", "ancient", "angry", "annoyed", "anxious", "arrogant", "ashamed", "attractive", "average",
+                "awesome", "awful", "bad", "beautiful", "better", "big", "bitter", "black", "blue", "boiling", "bold",
+                "bored", "boring", "brave", "bright", "brilliant", "busy", "calm", "careful", "careless", "cautious",
+                "charming", "cheerful", "clean", "clear", "clever", "cloudy", "clumsy", "colorful", "comfortable",
+                "concerned", "confused", "content", "cooperative", "courageous", "crazy", "creepy", "crowded", "cruel",
+                "curious", "cute", "dangerous", "dark", "dead", "deep", "defiant", "delicious", "delightful",
+                "depressed", "determined", "different", "difficult", "dirty", "disgusted", "distinct", "disturbed",
+                "dizzy", "doubtful", "drab", "dull", "eager", "easy", "elated", "elegant", "embarrassed", "enchanting",
+                "evil", "excited", "expensive", "exuberant", "fair", "faithful", "famous", "fancy", "fantastic", "fast",
+                "fat", "fierce", "filthy", "fine", "flaky", "flat", "fluffy", "foolish", "frail", "frantic", "fresh",
+                "friendly", "frightened", "funny", "furry", "gentle", "gifted", "gigantic", "glamorous", "gleaming",
+                "glorious", "good", "gorgeous", "graceful", "greedy", "green", "grieving", "grotesque", "grumpy",
+                "handsome", "happy", "hard", "harsh", "healthy", "heavy", "helpful", "helpless", "hilarious",
+                "homeless", "horrible", "hungry", "hurt", "icy", "ideal", "immense", "impatient", "important",
+                "impossible", "innocent", "inquisitive", "itchy", "jealous", "jittery", "jolly", "joyous", "juicy",
+                "kind", "large", "late", "lazy", "light", "little", "lively", "lonely", "long", "loose", "loud",
+                "lovely", "lucky", "mad", "magnificent", "mammoth", "many", "massive", "mellow", "melodic", "melted",
+                "mighty", "miserable", "moody", "nasty", "naughty", "nervous", "nice", "noisy", "normal", "nutty",
+                "obedient", "obnoxious", "odd", "old", "orange", "ordinary", "outrageous", "overjoyed", "painful",
+                "pale", "perfect", "pink", "plain", "pleasant", "poised", "poor", "powerful", "precious", "pretty",
+                "prickly", "proud", "puzzled", "quaint", "quick", "quiet", "rainy", "rapid", "rare", "raspy", "red",
+                "relieved", "repulsive", "rich", "ripe", "roasted", "robust", "rotten", "rough", "round", "salty",
+                "scary", "scattered", "scrawny", "selfish", "shiny", "short", "shy", "silky", "silly", "skinny",
+                "smiling", "smooth", "soft", "sore", "sour", "spicy", "splendid", "spotted", "square", "squeaky",
+                "stale", "steady", "steep", "sticky", "stormy", "stout", "straight", "strange", "strong", "stupid",
+                "successful", "sweet", "swift", "tall", "tame", "tasty", "tender", "terrible", "thankful", "thick",
+                "thin", "thoughtful", "thundering", "tiny", "tired", "tough", "troubled", "ugliest", "ugly", "uneven",
+                "uninterested", "unsightly", "unusual", "upset", "uptight", "vast", "victorious", "vivacious",
+                "wandering", "warm", "weak", "weary", "wet", "whispering", "wide", "wild", "witty", "wonderful",
+                "worried", "wretched", "yellow", "young", "yummy", "zany", "zealous", "encouraging", "energetic",
+                "enthusiastic", "envious", "sleepy", "slimy", "slippery", "slow", "small", "smart",
+        };
+
+        std::cout << ac_cjgdev (text, patterns) << '\n';
+        std::cout << naiv (text, patterns) << '\n';
+        std::cout << ac_nfa (text, patterns) << std::endl;
 
         ankerl::nanobench::Bench bench;
         bench.title ("Aho-Corasick Comparisons")
                 .unit ("byte")
                 .batch (text.size ())
-                .epochIterations (20)
-                .relative (true)
-                .warmup (1);
+                .relative (true);
 
         auto add_benchmark = [&bench]<typename Op> (const std::string &name,
                                                     Op &&op) -> void

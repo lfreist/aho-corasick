@@ -14,8 +14,13 @@
 
 #include <iostream>
 
-State::State (State *failed, State *nfa_fail, size_t depth) : _failed (failed), NFA_FAIL (nfa_fail), _depth (depth)
-{}
+State::State (State *failed, size_t depth) : _failed (failed), _depth (depth)
+{
+        for (auto& transition : _transitions)
+                {
+                        transition = failed;
+                }
+}
 
 void State::add_match (const std::string *match)
 {
@@ -34,7 +39,7 @@ void State::add_transition (CodePoint code_point, State *state)
 
 State *State::next_state (CodePoint code_point) const
 {
-        return _transitions[code_point] == nullptr ? NFA_FAIL : _transitions[code_point];
+        return _transitions[code_point];
 }
 
 const std::set<const std::string *> &State::get_matches () const
@@ -47,9 +52,6 @@ const std::set<const std::string *> &State::get_matches () const
 NFA::NFA (const std::vector<std::string> &patterns, MatchKind match_kind, bool ascii_i_case)
         : _match_kind (match_kind), _ignore_case (ascii_i_case)
 {
-        // setup FAIL
-        _fail_state->NFA_FAIL = _fail_state;
-        _fail_state->_failed = _start_state;
         // setup START
         _start_state->_failed = _start_state;
         init_start_state ();
@@ -63,7 +65,6 @@ NFA::NFA (const std::vector<std::string> &patterns, MatchKind match_kind, bool a
 NFA::~NFA ()
 {
         delete _dead_state;
-        delete _fail_state;
         delete _start_state;
         for (auto *s : _states)
                 {
@@ -94,7 +95,7 @@ void NFA::build_trie (const std::vector<std::string> &patterns)
                                                 }
                                         _char_set.add_char (c);
                                         State *next = prev->next_state (c);
-                                        if (next == _fail_state)
+                                        if (next == nullptr || next == _start_state)
                                                 {
                                                         next = add_state (depth);
                                                         prev->add_transition (c, next);
@@ -118,12 +119,11 @@ void NFA::add_failure_transitions ()
 {
         bool is_leftmost = _match_kind == MatchKind::LEFTMOST_FIRST;
         std::queue<State *> queue;
-        std::set<State *> visited;
+        std::set<State *> visited {nullptr};
         for (int c = 0; c < 256; ++c)
                 {
                         State *next = _start_state->next_state (c);
-                        // TODO: c++20 should have visited.contains(), right?
-                        if (next == _start_state || visited.find (next) != visited.end ())
+                        if (next == _start_state || visited.contains(next))
                                 {
                                         continue;
                                 }
@@ -141,7 +141,7 @@ void NFA::add_failure_transitions ()
                         for (int c = 0; c < 256; ++c)
                                 {
                                         State *next = state->next_state (c);
-                                        if (visited.find (next) != visited.end ())
+                                        if (visited.contains(next))
                                                 {
                                                         continue;
                                                 }
@@ -153,7 +153,7 @@ void NFA::add_failure_transitions ()
                                                         continue;
                                                 }
                                         auto *fail = state->_failed;
-                                        while (fail->next_state (c) == _fail_state)
+                                        while (fail->next_state (c) == nullptr)
                                                 {
                                                         fail = fail->_failed;
                                                 }
@@ -176,7 +176,7 @@ void NFA::copy_matches (State *src, State *dst)
 
 State *NFA::add_state (size_t depth)
 {
-        State* state = new State(_start_state, _fail_state, depth);
+        auto* state = new State(_start_state, depth);
         _states.push_back (state);
         return state;
 }
@@ -186,7 +186,7 @@ void NFA::init_start_state ()
         _start_state->_failed = _start_state;
         for (uint8_t c = 0; /**/ ; ++c)
                 {
-                        _start_state->add_transition (c, _fail_state);
+                        _start_state->add_transition (c, nullptr);
                         if (c == 255)
                                 {
                                         break;
@@ -198,7 +198,7 @@ void NFA::add_start_state_loop ()
 {
         for (uint8_t c = 0; /**/; ++c)
                 {
-                        if (_start_state->next_state (c) == _fail_state)
+                        if (_start_state->next_state (c) == nullptr)
                                 {
                                         _start_state->add_transition (c, _start_state);
                                 }
