@@ -10,50 +10,25 @@
 
 #include <queue>
 #include <set>
-#include <numeric>
 
-#include <iostream>
-
-State::State (State *failed, size_t depth) : _failed (failed), _depth (depth)
-{
-        for (auto& transition : _transitions)
-                {
-                        transition = failed;
-                }
-}
-
-void State::add_match (const std::string *match)
-{
-        _matches.insert (match);
-}
+namespace automaton {
 
 bool State::is_match () const
 {
-        return !_matches.empty ();
-}
-
-void State::add_transition (CodePoint code_point, State *state)
-{
-        _transitions[code_point] = state;
+        return !matches.empty ();
 }
 
 State *State::next_state (CodePoint code_point) const
 {
-        return _transitions[code_point];
+        return transitions[code_point];
 }
 
-const std::set<const std::string *> &State::get_matches () const
-{
-        return _matches;
-}
 
 // ===== NFA ===========================================================================================================
 
 NFA::NFA (const std::vector<std::string> &patterns, MatchKind match_kind, bool ascii_i_case)
         : _match_kind (match_kind), _ignore_case (ascii_i_case)
 {
-        // setup START
-        _start_state->_failed = _start_state;
         init_start_state ();
         build_trie (patterns);
         add_start_state_loop ();
@@ -94,14 +69,14 @@ void NFA::build_trie (const std::vector<std::string> &patterns)
                                                         break;
                                                 }
                                         _char_set.add_char (c);
-                                        State *next = prev->next_state (c);
-                                        if (next == nullptr || next == _start_state)
+                                        State *next = prev->transitions[static_cast<CodePoint>(c)];
+                                        if (next == nullptr)
                                                 {
                                                         next = add_state (depth);
-                                                        prev->add_transition (c, next);
+                                                        prev->transitions[static_cast<CodePoint>(c)] = next;
                                                         if (_ignore_case)
                                                                 {
-                                                                        prev->add_transition (opposite_ascii_case (c), next);
+                                                                        prev->transitions[opposite_ascii_case (c)] = next;
                                                                 }
                                                 }
                                         prev = next;
@@ -111,57 +86,49 @@ void NFA::build_trie (const std::vector<std::string> &patterns)
                                 {
                                         continue;
                                 }
-                        prev->add_match (&pattern);
+                        prev->matches.insert (&pattern);
                 }
 }
 
 void NFA::add_failure_transitions ()
 {
         bool is_leftmost = _match_kind == MatchKind::LEFTMOST_FIRST;
-        std::queue<State *> queue;
-        std::set<State *> visited {nullptr};
-        for (int c = 0; c < 256; ++c)
+        std::queue<State *> queue{};
+        std::set<State *> visited{nullptr};
+        for (auto &next : _start_state->transitions)
                 {
-                        State *next = _start_state->next_state (c);
-                        if (next == _start_state || visited.contains(next))
-                                {
-                                        continue;
-                                }
+                        if (visited.contains (next))
+                                continue;
                         queue.push (next);
                         visited.insert (next);
                         if (is_leftmost && next->is_match ())
-                                {
-                                        next->_failed = _dead_state;
-                                }
+                                next->failed = _dead_state;
                 }
         while (!queue.empty ())
                 {
-                        auto state = queue.front ();
+                        auto *state = queue.front ();
                         queue.pop ();
-                        for (int c = 0; c < 256; ++c)
+                        for (int c = 0; c < 128; ++c)
                                 {
-                                        State *next = state->next_state (c);
-                                        if (visited.contains(next))
-                                                {
-                                                        continue;
-                                                }
+                                        State *next = state->transitions[c];
+                                        if (visited.contains (next))
+                                                continue;
                                         queue.push (next);
                                         visited.insert (next);
                                         if (is_leftmost && next->is_match ())
                                                 {
-                                                        state->_failed = _dead_state;
+                                                        next->failed = _dead_state;
                                                         continue;
                                                 }
-                                        auto *fail = state->_failed;
+                                        State *fail = state->failed;
                                         while (fail->next_state (c) == nullptr)
                                                 {
-                                                        fail = fail->_failed;
+                                                        fail = fail->failed;
                                                 }
                                         fail = fail->next_state (c);
-                                        next->_failed = fail;
+                                        next->failed = fail;
                                         copy_matches (fail, next);
                                 }
-
                         if (!is_leftmost)
                                 {
                                         copy_matches (_start_state, state);
@@ -171,40 +138,28 @@ void NFA::add_failure_transitions ()
 
 void NFA::copy_matches (State *src, State *dst)
 {
-        dst->_matches.insert (src->_matches.begin (), src->_matches.end ());
+        dst->matches.insert (src->matches.begin (), src->matches.end ());
 }
 
 State *NFA::add_state (size_t depth)
 {
-        auto* state = new State(_start_state, depth);
+        auto *state = new State {{nullptr}, {}, _start_state, depth};
         _states.push_back (state);
         return state;
 }
 
 void NFA::init_start_state ()
 {
-        _start_state->_failed = _start_state;
-        for (uint8_t c = 0; /**/ ; ++c)
-                {
-                        _start_state->add_transition (c, nullptr);
-                        if (c == 255)
-                                {
-                                        break;
-                                }
-                }
+        _start_state->failed = _start_state;
 }
 
 void NFA::add_start_state_loop ()
 {
-        for (uint8_t c = 0; /**/; ++c)
+        for (auto &s : _start_state->transitions)
                 {
-                        if (_start_state->next_state (c) == nullptr)
+                        if (s == nullptr)
                                 {
-                                        _start_state->add_transition (c, _start_state);
-                                }
-                        if (c == 255)
-                                {
-                                        break;
+                                        s = _start_state;
                                 }
                 }
 }
@@ -216,7 +171,7 @@ void NFA::close_start_state_loop_for_leftmost ()
                                 {
                                         if (_start_state->next_state (c) == _start_state)
                                                 {
-                                                        _start_state->add_transition (c, _dead_state);
+                                                        _start_state->transitions[c] = _dead_state;
                                                 }
                                         if (c == 255)
                                                 {
@@ -227,12 +182,11 @@ void NFA::close_start_state_loop_for_leftmost ()
 }
 void NFA::add_dead_state_loop ()
 {
-        for (uint8_t c = 0; /**/; ++c)
+        for (auto &s : _dead_state->transitions)
                 {
-                        _dead_state->add_transition (c, _dead_state);
-                        if (c == 255)
-                                {
-                                        break;
-                                }
+                        s = _dead_state;
                 }
+
 }
+
+}  // namespace automaton

@@ -7,41 +7,20 @@
 
 #include <nanobench.h>
 #include <aho-corasick-cjgdev.hpp>
-#include <ac/nfa/nfa.h>
+#include <ac/ahocorasick.h>
 
 #include <iostream>
 #include <cstring>
 #include <fstream>
 
-size_t ac_nfa (std::string &text, std::vector<std::string> &patterns)
+size_t ac_nfa (std::string &text, AhoCorasick<automaton::NFA> & searcher)
 {
-        NFA nfa (patterns, MatchKind::STANDARD, false);
-        State *state = nfa._start_state;
-        size_t result = 0;
-        for (auto c : text)
-                {
-                        if (state->is_match ())
-                                {
-                                        result += state->get_matches().size();
-                                }
-                        state = state->next_state (c);
-                        if (state == nfa._dead_state)
-                                {
-                                        std::cout << "\n\ndead\n\n";
-                                        break;
-                                }
-                }
-        return result;
+        return searcher.find_all (text).size();
 }
 
-size_t ac_cjgdev (std::string &text, std::vector<std::string> &patterns)
+size_t ac_cjgdev (std::string &text, aho_corasick::trie &searcher)
 {
-        aho_corasick::trie t;
-        for (auto &p : patterns)
-                {
-                        t.insert (p);
-                }
-        return t.parse_text (text).size ();
+        return searcher.parse_text (text).size ();
 }
 
 size_t naiv (std::string &text, std::vector<std::string> &patterns)
@@ -122,10 +101,6 @@ int main (int argc, char **argv)
                 "enthusiastic", "envious", "sleepy", "slimy", "slippery", "slow", "small", "smart",
         };
 
-        std::cout << ac_cjgdev (text, patterns) << '\n';
-        std::cout << naiv (text, patterns) << '\n';
-        std::cout << ac_nfa (text, patterns) << std::endl;
-
         ankerl::nanobench::Bench bench;
         bench.title ("Aho-Corasick Comparisons")
                 .unit ("byte")
@@ -138,9 +113,14 @@ int main (int argc, char **argv)
           bench.run (name, std::forward<Op> (op));
         };
 
-        add_benchmark ("cjgdev/aho-corasick", [&patterns, &text] ()
+        aho_corasick::trie cjgdev_searcher;
+        for (auto& pattern : patterns)
+                {
+                        cjgdev_searcher.insert (pattern);
+                }
+        add_benchmark ("cjgdev/aho-corasick", [&cjgdev_searcher, &text] ()
         {
-          auto res = ac_cjgdev (text, patterns);
+          auto res = ac_cjgdev (text, cjgdev_searcher);
           ankerl::nanobench::doNotOptimizeAway (res);
         });
         add_benchmark ("std::strstr", [&patterns, &text] ()
@@ -148,11 +128,12 @@ int main (int argc, char **argv)
           auto res = naiv (text, patterns);
           ankerl::nanobench::doNotOptimizeAway (res);
         });
-        add_benchmark ("lfreist/aho-corasick (NFA)", [&patterns, &text] ()
+
+        AhoCorasick<automaton::NFA> searcher(patterns, MatchKind::STANDARD);
+        add_benchmark ("lfreist/aho-corasick (NFA)", [&searcher, &text] ()
         {
-          auto res = ac_nfa (text, patterns);
+          auto res = ac_nfa (text, searcher);
           ankerl::nanobench::doNotOptimizeAway (res);
         });
-
         return 0;
 }
